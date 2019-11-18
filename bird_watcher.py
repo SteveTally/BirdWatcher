@@ -49,7 +49,7 @@ def CameraPreview(camera, enabled):
 
 
 def LogClass(c,text_output_file):
-    text_output_file.write(c[0]+","+c[1]+"/n")
+    text_output_file.write(str(c[0])+","+str(c[1])+"/n")
     # check to see if class is already in the dataframe
     # If c[0]
         #Add to the count
