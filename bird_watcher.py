@@ -48,8 +48,8 @@ def CameraPreview(camera, enabled):
             camera.stop_preview()
 
 
-def LogClass(class,text_output_file):
-    text_output_file.write(class[0]+","+class[1]"/n")
+def LogClass(c,text_output_file):
+    text_output_file.write(c[0]+","+c[1]"/n")
     # check to see if class is already in the dataframe
     # If c[0]
         #Add to the count
@@ -81,8 +81,8 @@ def main():
             print(classes_info(classes))
             #if classes:
             #    camera.annotate_text = '%s (%.2f)' % classes[0]
-            for class in classes:
-                LogClass(class,text_output_file)
+            for c in classes:
+                LogClass(c,text_output_file)
 
                 #
 if __name__ == '__main__':
