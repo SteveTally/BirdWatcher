@@ -20,6 +20,9 @@ classes.
 Example:
 image_classification_camera.py --num_frames 10
 """
+
+
+
 import argparse
 import contextlib
 
@@ -27,6 +30,9 @@ from aiy.vision.inference import CameraInference
 #from aiy.vision.models import image_classification
 from aiy.vision.models import inaturalist_classification
 from picamera import PiCamera
+
+import os.path
+from os import path
 
 def classes_info(classes):
     return ', '.join('%s (%.2f)' % pair for pair in classes)
@@ -41,24 +47,43 @@ def CameraPreview(camera, enabled):
         if enabled:
             camera.stop_preview()
 
+
+def LogClass(class,text_output_file):
+    text_output_file.write(class[0]+","+class[1]"/n")
+    # check to see if class is already in the dataframe
+    # If c[0]
+        #Add to the count
+        #Return true
+
+    # If not
+        # Add a new row with class name
+        # Add
+
 def main():
-    parser = argparse.ArgumentParser('Image classification camera inference example.')
+    parser = argparse.ArgumentParser('Bird Watcher')
     parser.add_argument('--num_frames', '-n', type=int, default=None,
-        help='Sets the number of frames to run for, otherwise runs forever.')
+    help='Sets the number of frames to run for, otherwise runs forever.')
     parser.add_argument('--num_objects', '-c', type=int, default=3,
         help='Sets the number of object interences to print.')
     parser.add_argument('--nopreview', dest='preview', action='store_false', default=True,
         help='Enable camera preview')
     args = parser.parse_args()
 
+
+    text_output_file = open("Output/BirdEvents.csv")
+
+
     with PiCamera(sensor_mode=4, framerate=30) as camera, \
          CameraPreview(camera, enabled=args.preview), \
          CameraInference(inaturalist_classification.model(inaturalist_classification.BIRDS)) as inference:
-        for result in inference.run(args.num_frames):
-            classes = inaturalist_classification.get_classes(result, top_k=args.num_objects)
+        for result in inference.run():
+            classes = inaturalist_classification.get_classes(result, top_k=3, threshold = 0.2)
             print(classes_info(classes))
-            if classes:
-                camera.annotate_text = '%s (%.2f)' % classes[0]
+            #if classes:
+            #    camera.annotate_text = '%s (%.2f)' % classes[0]
+            for class in classes:
+                LogClass(class,text_output_file)
 
+                #
 if __name__ == '__main__':
     main()
