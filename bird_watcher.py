@@ -70,7 +70,7 @@ def main():
     args = parser.parse_args()
 
 
-    text_output_file = open("Output/BirdEvents.csv")
+    text_output_file = open("Output/BirdEvents.csv", "w+")
 
 
     with PiCamera(sensor_mode=4, framerate=30) as camera, \
