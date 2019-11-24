@@ -30,9 +30,12 @@ from aiy.vision.inference import CameraInference
 #from aiy.vision.models import image_classification
 from aiy.vision.models import inaturalist_classification
 from picamera import PiCamera
-
+import datetime
 import os.path
 from os import path
+
+
+species_list = ['background']
 
 def classes_info(classes):
     return ', '.join('%s (%.2f)' % pair for pair in classes)
@@ -48,9 +51,17 @@ def CameraPreview(camera, enabled):
             camera.stop_preview()
 
 
-def LogClass(c,text_output_file):
-    text_output_file.write(str(c[0])+","+str(c[1])+"/n")
-    # check to see if class is already in the dataframe
+def LogClass(c,text_output_file, camera):
+    #species_list # global var
+    global species_list
+    if str(c[0]) not in ["background","Colaptes auratus (Northern Flicker)"]: # only proceed if class is not background
+        text_output_file.write(str(c[0])+", "+str(round(c[1],2))+", "+str(datetime.datetime.now())+"\n")
+        print(str(c[0])+", "+str(round(c[1],2))+", "+str(datetime.datetime.now()))
+        if c[0] not in species_list:
+            species_list.append(c[0]) # add to the list of captured species
+            camera.capture('Output/Images/'+str(c[0])+'.jpg') # save a picture
+
+    #   check to see if class is already in the dataframe
     # If c[0]
         #Add to the count
         #Return true
@@ -60,29 +71,30 @@ def LogClass(c,text_output_file):
         # Add
 
 def main():
+
     parser = argparse.ArgumentParser('Bird Watcher')
     parser.add_argument('--num_frames', '-n', type=int, default=None,
     help='Sets the number of frames to run for, otherwise runs forever.')
-    parser.add_argument('--num_objects', '-c', type=int, default=3,
-        help='Sets the number of object interences to print.')
-    parser.add_argument('--nopreview', dest='preview', action='store_false', default=True,
-        help='Enable camera preview')
+    #parser.add_argument('--num_objects', '-c', type=int, default=3,
+    #    help='Sets the number of object interences to print.')
+    #parser.add_argument('--nopreview', dest='preview', action='store_false', default=True,
+    #    help='Enable camera preview')
     args = parser.parse_args()
 
 
-    text_output_file = open("Output/BirdEvents.csv", "w+")
+    text_output_file = open("Output/BirdEvents.csv", "a")
 
-
-    with PiCamera(sensor_mode=4, framerate=30) as camera, \
-         CameraPreview(camera, enabled=args.preview), \
+    print("Watching...")
+    with PiCamera(sensor_mode=3, framerate=15) as camera, \
+         CameraPreview(camera, enabled=False), \
          CameraInference(inaturalist_classification.model(inaturalist_classification.BIRDS)) as inference:
         for result in inference.run():
-            classes = inaturalist_classification.get_classes(result, top_k=3, threshold = 0.2)
-            print(classes_info(classes))
+            classes = inaturalist_classification.get_classes(result, top_k=3, threshold = 0.3)
+            #print(classes_info(classes))
             #if classes:
             #    camera.annotate_text = '%s (%.2f)' % classes[0]
             for c in classes:
-                LogClass(c,text_output_file)
+                LogClass(c,text_output_file, camera)
 
                 #
 if __name__ == '__main__':
