@@ -52,23 +52,15 @@ def CameraPreview(camera, enabled):
 
 
 def LogClass(c,text_output_file, camera):
-    #species_list # global var
+    
     global species_list
     if str(c[0]) not in ["background","Colaptes auratus (Northern Flicker)"]: # only proceed if class is not background
         text_output_file.write(str(c[0])+", "+str(round(c[1],2))+", "+str(datetime.datetime.now())+"\n")
         print(str(c[0])+", "+str(round(c[1],2))+", "+str(datetime.datetime.now()))
-        if c[0] not in species_list:
+        if c[0] not in species_list or c[1] >= 0.8:
             species_list.append(c[0]) # add to the list of captured species
-            camera.capture('Output/Images/'+str(c[0])+'.jpg') # save a picture
+            camera.capture('Output/Images/'+str(c[0])+str(datetime.datetime.now())+'.jpg') # save a picture
 
-    #   check to see if class is already in the dataframe
-    # If c[0]
-        #Add to the count
-        #Return true
-
-    # If not
-        # Add a new row with class name
-        # Add
 
 def main():
 
@@ -82,14 +74,15 @@ def main():
     args = parser.parse_args()
 
 
-    text_output_file = open("Output/BirdEvents.csv", "a")
+    text_output_file = open("Output/BirdEvents.csv", "a+")
 
     print("Watching...")
-    with PiCamera(sensor_mode=3, framerate=15) as camera, \
+    with PiCamera(sensor_mode=3, resolution = (1000, 2464)) as camera, \
          CameraPreview(camera, enabled=False), \
          CameraInference(inaturalist_classification.model(inaturalist_classification.BIRDS)) as inference:
-        for result in inference.run():
-            classes = inaturalist_classification.get_classes(result, top_k=3, threshold = 0.3)
+         camera.zoom = (0.1,0.25,0.8,0.5)
+         for result in inference.run():
+            classes = inaturalist_classification.get_classes(result, top_k=3, threshold = 0.4)
             #print(classes_info(classes))
             #if classes:
             #    camera.annotate_text = '%s (%.2f)' % classes[0]
