@@ -28,11 +28,11 @@ inference = CameraInference(inaturalist_classification.model(inaturalist_classif
 
 setting_number = 1
 for zoom_setting in zoom_settings_list:
-         camera.zoom = (zoom_setting) #set zoom and AOI
-         time.sleep(1)
-         camera.capture(str(setting_number)+'.jpg')
-         for result in inference.run(1): #run inference
-            classes = inaturalist_classification.get_classes(result, top_k=10, threshold = 0)
+        camera.zoom = (zoom_setting) #set zoom and AOI
+        time.sleep(1)
+        camera.capture(str(setting_number)+'.jpg')
+        for result in inference.run(1): #run inference
+        classes = inaturalist_classification.get_classes(result, top_k=10, threshold = 0)
             for i, (label, score) in enumerate(classes):
                 print('%d %s - %d: %s (prob=%f)' % (setting_number,str(zoom_setting), i, label, score))
                 result_file.write('%d %s - %d: %s (prob=%f)\n' % (setting_number,str(zoom_setting), i, label, score))
