@@ -30,7 +30,7 @@ setting_number = 1
 for zoom_setting in zoom_settings_list:
          camera.zoom = (zoom_setting) #set zoom and AOI
          time.sleep(1)
-         result = inference.run() #run inference
+         result = inference.run(1) #run inference
          classes = inaturalist_classification.get_classes(result, top_k=10, threshold = 0)
 
          for i, (label, score) in enumerate(classes):
