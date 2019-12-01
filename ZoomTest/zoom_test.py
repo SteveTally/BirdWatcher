@@ -27,7 +27,7 @@ time.sleep(5)
 inference = CameraInference(inaturalist_classification.model(inaturalist_classification.BIRDS))
 
 setting_number = 1
-for zoom_setting in zoom_settings_list
+for zoom_setting in zoom_settings_list:
          camera.zoom = (zoom_setting) #set zoom and AOI
          time.sleep(1)
          result = inference.run() #run inference
