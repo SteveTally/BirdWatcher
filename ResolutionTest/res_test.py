@@ -24,6 +24,3 @@ for image_name in images_to_test:
         for i, (label, score) in enumerate(classes):
             print('Test: %s Result %d: %s (prob=%f)' % (image_name, i, label, score))
             result_file.write('Test: %s Result %d: %s (prob=%f)\n' % (image_name, i, label, score))
-
-
-

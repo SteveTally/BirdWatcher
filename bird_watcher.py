@@ -1,94 +1,138 @@
-#!/usr/bin/env python3
-#
-# Copyright 2017 Google Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""Camera image classification demo code.
-Runs continuous image classification on camera frames and prints detected object
-classes.
-Example:
-image_classification_camera.py --num_frames 10
-"""
+#### Bird Watcher ####
+# 
 
 
+#import contextlib
 
-import argparse
-import contextlib
-
-from aiy.vision.inference import CameraInference
+from aiy.vision.inference import ImageInference
 #from aiy.vision.models import image_classification
 from aiy.vision.models import inaturalist_classification
 from picamera import PiCamera
-import datetime
-import os.path
-from os import path
+from datetime import datetime
+#import os.path
+#from os import path
+#import time
+from PIL import Image, ImageOps
+import io
+from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
+#from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 
 
-species_list = ['background']
 
-def classes_info(classes):
-    return ', '.join('%s (%.2f)' % pair for pair in classes)
+class BirdCamera():
+    def __init__(self,regions_of_interest):
+        self.regions_of_interest = regions_of_interest
 
-@contextlib.contextmanager
-def CameraPreview(camera, enabled):
-    if enabled:
-        camera.start_preview()
-    try:
-        yield
-    finally:
-        if enabled:
-            camera.stop_preview()
+        print("starting camera...")
+        # Set Sensor Mode
+        self.camera = PiCamera(sensor_mode=3)
+        self.camera.resolution = (1640,1232)
+
+        #### Compensate for Snowy Background ####
+        self.camera.meter_mode = 'backlit'
+        self.camera.brightness = 35
+        self.camera.exposure_compensation = 8
+
+        # Start Camear #
+        self.camera.start_preview()
+
+    def capture(self):
+        # captture image from camera
+        self.image_stream = io.BytesIO() # start a new stream object
+        self.camera.capture(self.image_stream, 'jpeg') # capture the image to the stream
+        self.image_stream.seek(0) # move back to the start of the image stream
+        self.image = Image.open(self.image_stream) # open the image stream as a PIL opbject
+        
+        self.image_dict = self.regions_of_interest.copy()
+        for region_name in self.regions_of_interest:
+            self.image_dict[region_name] = (self.image.crop(self.regions_of_interest[region_name]).copy())
+        return self.image_dict
+    def stop(self):
+        self.camera.stop_preview()
 
 
-def LogClass(c,text_output_file, camera):
+
+
+class AWSDataLogger():
+
+    def __init__(self, topic):
+        self.host = "a2g5pwtppcagwt-ats.iot.us-east-1.amazonaws.com"
+        #certPath = "/home/pi/BirdWatcher/AWSCertificates/"
+        self.clientId = "RaspberryPi_BirdWatcher"
+        self.topic = topic
+        # Initialize Client
+        self.AWSClient = None
+        self.AWSClient = AWSIoTMQTTClient(self.clientId)
+        self.AWSClient.configureEndpoint(self.host, 8883)
+        self.AWSClient.configureCredentials("/home/pi/cert/CA1.pem", "/home/pi/cert/8fff3b9b49-private.pem.key", "/home/pi/cert/8fff3b9b49-certificate.pem.crt")
     
-    global species_list
-    if str(c[0]) not in ["background","Colaptes auratus (Northern Flicker)"]: # only proceed if class is not background
-        text_output_file.write(str(c[0])+", "+str(round(c[1],2))+", "+str(datetime.datetime.now())+"\n")
-        print(str(c[0])+", "+str(round(c[1],2))+", "+str(datetime.datetime.now()))
-        if c[0] not in species_list or c[1] >= 0.8:
-            species_list.append(c[0]) # add to the list of captured species
-            camera.capture('Output/Images/'+str(c[0])+str(datetime.datetime.now())+'.jpg') # save a picture
+        # Configure Client
+        self.AWSClient.configureAutoReconnectBackoffTime(1, 32, 20)
+        self.AWSClient.configureOfflinePublishQueueing(-1)  # Infinite offline Publish queueing
+        self.AWSClient.configureDrainingFrequency(2)  # Draining: 2 Hz
+        self.AWSClient.configureConnectDisconnectTimeout(10)  # 10 sec
+        self.AWSClient.configureMQTTOperationTimeout(5)  # 5 sec
+        self.AWSClient.connect()
+        
+    def publish(self, image_name,species,probability,image_region):
+        now = datetime.utcnow()
+        now_str = now.strftime('%Y-%m-%d %H:%M:%SZ') 
+        
+        self.payload = '{ "timestamp": "' + now_str + '","species": "' + species + '","probability": '+ str(round(probability,2)) + ',"image_region": "'+image_region+  '","image_name": "'+ image_name+'" }'
+        self.AWSClient.publish(self.topic, self.payload, 0)
+        
 
+class BirdInference():
+    def __init__(self):
+        print("starting inference..")
+        self.inference = ImageInference(inaturalist_classification.model(inaturalist_classification.BIRDS))
+    def run(self, image):
+        self.result = self.inference.run(image)
+        self.bird_class = inaturalist_classification.get_classes(self.result, top_k=1, threshold = 0.8)
+        if len(self.bird_class) == 0: # if nothing is found, return none
+            return None
+        elif self.bird_class[0][0] == 'background':# if background is found, return none
+            return None
+        else: # If a bird clas is returned, flip the image, run again and ensure same class is returned
+            self.result_2 = self.inference.run(ImageOps.mirror(image))
+            self.bird_class_2 = inaturalist_classification.get_classes(self.result_2, top_k=1, threshold = 0.8)
+            if len(self.bird_class_2) == 0:
+                return None
+            else:
+                if self.bird_class_2[0][0] == self.bird_class[0][0]:
+                    return self.bird_class[0]
+                else:
+                    return None
+    
+        #TODO: double inference
+        #Remobe background and only return the top class
+        
 
 def main():
 
-    parser = argparse.ArgumentParser('Bird Watcher')
-    parser.add_argument('--num_frames', '-n', type=int, default=None,
-    help='Sets the number of frames to run for, otherwise runs forever.')
-    #parser.add_argument('--num_objects', '-c', type=int, default=3,
-    #    help='Sets the number of object interences to print.')
-    #parser.add_argument('--nopreview', dest='preview', action='store_false', default=True,
-    #    help='Enable camera preview')
-    args = parser.parse_args()
+    # set up camera
+    camera = BirdCamera(regions_of_interest = {'ll': (389,710,736,920), 'ur': (660,580,969,810), 'lr': (640,800,994,1060)})
+    # initialize data logger
+    data_logger = AWSDataLogger(topic = "bird_sighting")
+    # load inference engine
+    bird_inference = BirdInference()
+    
+    # loop durring day hours
+    i = 0
+    while datetime.now().hour <= 20:
+        # check to see if time is between 7 AM and 6 PM
+            
+            image_dict = camera.capture() # capture image
+            print(i, end='\r')
+            for region, image in  image_dict.items():
+                result = bird_inference.run(image)
+                
+                if result:
+                    image_name = result[0]+str(datetime.now())+'.jpg'
+                    data_logger.publish(image_name = image_name,species = result[0],probability = result[1],image_region = region)
+                    image.save('Output/Images/'+image_name)
+                    print(result[0])
+            i = i +1                    
 
-
-    text_output_file = open("Output/BirdEvents.csv", "a+")
-
-    print("Watching...")
-    with PiCamera(sensor_mode=3, resolution = (1000, 2464)) as camera, \
-         CameraPreview(camera, enabled=False), \
-         CameraInference(inaturalist_classification.model(inaturalist_classification.BIRDS)) as inference:
-         camera.zoom = (0.1,0.25,0.8,0.5)
-         for result in inference.run():
-            classes = inaturalist_classification.get_classes(result, top_k=3, threshold = 0.4)
-            #print(classes_info(classes))
-            #if classes:
-            #    camera.annotate_text = '%s (%.2f)' % classes[0]
-            for c in classes:
-                LogClass(c,text_output_file, camera)
-
-                #
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
